@@ -59,7 +59,6 @@ csim 分数 & case1 & case2 & case3 & weighted & Part B 性能分\\
 \end{tabularx}
 \end{table}
 \vspace{-9pt}
-{\small 表中按模板保留两位小数；正文保留更多位数以便核对。Part A 共20项测试全部通过，Part B 各 case 均为 \texttt{OK}。}
 \subsection*{本地评测截图}
 {\small 以下为实验过程中保存的原始终端截图，展示 Part A 完整测试与 Part B 最终测试结果。}
 
@@ -69,22 +68,7 @@ csim 分数 & case1 & case2 & case3 & weighted & Part B 性能分\\
 \shot[0.98]{img/part_b_final.png}{最终 Part B 本地评测：综合加速比8.0797，性能分100.00。}{fig:final}
 
 \clearpage
-\subsection*{评测数据复核}
-{\small 下表汇总最终评测数据，与前页截图一致。本次对项目保存的8份 Part B trace 重新统计，cache miss、访存次数及 latency 均与截图一致；trace 复核用于检查记录，不等同于重新运行官方评测。}
-\begin{table}[H]
-\centering\small
-\begin{tabular}{lrrrrr}
-\toprule
-Case & \mc & \mr & latency & baseline latency & speedup\\
-\midrule
-case0 & 3 & 20 & 65 & 65 & 1.0000\\
-case1 & 496 & 2304 & 9744 & 80328 & 8.2438\\
-case2 & 3200 & 17408 & 65408 & 607040 & 9.2808\\
-case3 & 4789 & 15120 & 86955 & 613542 & 7.0559\\
-\bottomrule
-\end{tabular}
-\caption{上一轮最终本地评测数据；Part B 数值已与当前保存的 trace 复核。}
-\end{table}
+
 
 \section{Part A: cache 模拟器}
 \subsection{实现简述}
