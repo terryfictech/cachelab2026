@@ -1,0 +1,286 @@
+\documentclass[UTF8,11pt,fontset=fandol]{ctexart}
+\usepackage[a4paper,left=23mm,right=23mm,top=20mm,bottom=21mm]{geometry}
+\usepackage{amsmath,amssymb,booktabs,tabularx,array,graphicx,float,enumitem}
+\usepackage{xcolor,listings,caption,fancyhdr,hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=blue!55!black,pdfauthor={唐骏逸},pdftitle={CacheLab 实验报告}}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{3pt}
+\linespread{1.18}
+\setlength{\emergencystretch}{2em}
+\setlist[itemize]{leftmargin=2em,itemsep=2pt,topsep=4pt}
+\setlist[enumerate]{leftmargin=2em,itemsep=2pt,topsep=4pt}
+\captionsetup{font=small,labelfont=bf,skip=5pt}
+\ctexset{
+  section={format=\Large\bfseries,beforeskip=15pt,afterskip=8pt},
+  subsection={format=\large\bfseries,beforeskip=11pt,afterskip=6pt},
+  subsubsection={format=\normalsize\bfseries,beforeskip=8pt,afterskip=4pt}
+}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small CacheLab 实验报告}
+\fancyhead[R]{\small 唐骏逸}
+\fancyfoot[C]{\small\thepage}
+\setlength{\headheight}{14pt}
+\renewcommand{\headrulewidth}{0.3pt}
+\lstset{
+  language=C++,basicstyle=\small\ttfamily,keywordstyle=\bfseries,
+  commentstyle=\color{black!60},columns=fullflexible,keepspaces=true,
+  showstringspaces=false,breaklines=true,frame=single,
+  rulecolor=\color{black!20},xleftmargin=0.5em,xrightmargin=0.5em,
+  aboveskip=6pt,belowskip=6pt
+}
+\newcommand{\mc}{\texttt{miss\_cache}}
+\newcommand{\mr}{\texttt{miss\_reg}}
+\newcommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\shot}[4][0.96]{%
+  \begin{figure}[H]\centering
+  \includegraphics[width=#1\linewidth]{#2}
+  \caption{#3}\label{#4}
+  \end{figure}}
+% 所有原始终端截图来自上一轮报告源码包，保存于本报告的 img/ 目录。
+% 以下成绩来自已保存的本地评测，本次另用现有 trace 核对 Part B 数值。
+\begin{document}
+\thispagestyle{empty}
+\begin{center}
+  {\LARGE\bfseries CacheLab 报告}\\[7pt]
+  姓名：唐骏逸\qquad 学号：2025201863\qquad 日期：2026年11月18日
+\end{center}
+\vspace{-5pt}
+\begin{table}[H]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabularx}{\linewidth}{*{6}{>{\centering\arraybackslash}X}}
+\toprule
+csim 分数 & case1 & case2 & case3 & weighted & Part B 性能分\\
+（/100）& speedup & speedup & speedup & speedup &（/100）\\
+\midrule
+100.00 & 8.24 & 9.28 & 7.06 & 8.08 & 100.00\\
+\bottomrule
+\end{tabularx}
+\end{table}
+\vspace{-9pt}
+\subsection*{本地评测截图}
+{\small 以下为实验过程中保存的原始终端截图，展示 Part A 完整测试与 Part B 最终测试结果。}
+
+\vspace{-7pt}
+\shot[0.98]{img/part_a.png}{Part A 本地评测：20/20，通过分数100.00。}{fig:parta}
+\vspace{-7pt}
+\shot[0.98]{img/part_b_final.png}{最终 Part B 本地评测：综合加速比8.0797，性能分100.00。}{fig:final}
+
+\clearpage
+
+
+\section{Part A: cache 模拟器}
+\subsection{实现简述}
+实现按“解析参数与 trace、拆分地址、查找缓存行、更新状态、汇总计数”的顺序推进。为降低调试难度，先实现每组仅一行的直接映射缓存，再扩展为每组 \(E\) 行并加入 LRU。缓存采用连续数组，组数为 \(S=2^s\)，块大小为 \(B=2^b\)；第 \(q\) 组的首行位于 \cmd{cache[q*E]}，每行保存 \texttt{valid}、\texttt{tag} 和 \texttt{last\_used}。
+
+\textbf{地址拆分。} 对地址 \(a\)，先去除块内偏移，再取组索引和标记：
+\[
+  u=a\gg b,\qquad
+  q=u\mathbin{\&}(2^s-1),\qquad
+  \mathrm{tag}=u\gg s.
+\]
+初始化时所有行的 \texttt{valid} 均为0；即使空行中的 tag 恰好等于待查 tag，也不能判定命中。这是从“能算地址”到“能维护缓存状态”时首先需要区分的情况。
+
+\textbf{查找与替换。} 每次数据访问使访问序号加1，扫描目标组，寻找命中行、第一条空行和最近访问序号最小的有效行。命中时增加 \texttt{hits} 并更新时间；未命中时先增加 \texttt{misses}，优先填空行，整组已满才淘汰 LRU 行并增加 \texttt{evictions}。新装入的行同样更新访问时间。扫描时遇到空行仍继续查找，因为后面的有效行可能命中；命中后则可直接结束本次扫描。实验 trace 中的 L、S 数据访问均按这一套缓存状态转移处理：写缺失时同样分配缓存行。当前任务只统计命中、缺失、替换，不模拟实际数据，也不统计脏块回写流量，因此没有维护 dirty 位；不能据此声称实现了完整的数据写回模拟。
+
+\textbf{手工核对。} 为避免只依赖测试分数，使用 \cmd{yi.trace}，设置 \(s=4,E=2,b=4\)，逐条核对组号、tag 与 LRU 状态。表中只列与本次访问有关的目标组，时间为访问序号。
+\begin{table}[H]
+\centering\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{clccp{64mm}}
+\toprule
+次序 & 访问 & 组号 & tag & 结果与访问后的目标组\\
+\midrule
+1 & 读 \texttt{0x10}  & 1 & 0 & miss；\(\{0@1,\text{空}\}\)\\
+2 & 读 \texttt{0x20}  & 2 & 0 & miss；\(\{0@2,\text{空}\}\)\\
+3 & 读 \texttt{0x22}  & 2 & 0 & hit；\(\{0@3,\text{空}\}\)\\
+4 & 写 \texttt{0x18}  & 1 & 0 & hit；\(\{0@4,\text{空}\}\)\\
+5 & 读 \texttt{0x110} & 1 & 1 & miss；\(\{0@4,1@5\}\)\\
+6 & 读 \texttt{0x210} & 1 & 2 & miss + eviction；\(\{2@6,1@5\}\)\\
+7 & 读 \texttt{0x12}  & 1 & 0 & miss + eviction；\(\{2@6,0@7\}\)\\
+\bottomrule
+\end{tabular}
+\end{table}
+结果为 \texttt{hits:2 misses:5 evictions:2}。第6次淘汰 tag 0，第7次再访问它仍然缺失；而且淘汰必然伴随缺失，不能把两者作为互斥事件计数。此前运行 \cmd{python3 test/csim_test.py}，20组结果均与参考实现一致。本次依据当前代码复核了上述状态转移；前述20/20属于上一轮官方脚本的实测记录。
+
+\subsection{亮点}
+\begin{itemize}
+  \item \textbf{分阶段建立可核对的状态模型：}先检查地址拆分，再检查 \(E=1\) 的命中与覆盖，最后检查 \(E>1\) 的 LRU，便于定位错误来自映射还是替换。
+  \item \textbf{用逻辑时间实现 LRU：}无需链表，命中和装入都更新时间；单次访问扫描目标组，时间复杂度为 \(O(E)\)，存储规模为 \(O(2^sE)\)。本部分主要追求正确、清晰，没有额外声称模拟运行速度上的优势。
+\end{itemize}
+
+\section{Part B: 矩阵乘法优化}
+\subsection{亮点}
+\begin{enumerate}
+  \item \textbf{寄存器分块：}case1、case2 同时计算 \(4*4\) 个结果，复用 A、B，并将 C 的部分和留在寄存器中，最后统一写回。
+  \item \textbf{按尺寸选择块形状：}case3 使用 \(3*7\) 分块，27行可由3整除，末尾6列通过边界判断处理。
+  \item \textbf{调整块间访问顺序：}case3 固定列块后遍历行块，相邻块交替正向、反向扫描 \(k\)，利用上一个块末尾留下的缓存数据。
+  \item \textbf{同时衡量两类访问成本：}不单看 cache miss，也检查 load/store 总次数及最终 latency。
+\end{enumerate}
+
+\subsubsection{我认为的最优秀的实现排序}
+\begin{enumerate}
+  \item \textbf{case3：}根据非整齐尺寸调整块形状，并优化块间复用，解决统一分块后最明显的性能瓶颈。
+  \item \textbf{case1：}通过逐步对照实验明确空间局部性、寄存器复用和写回次数之间的关系。
+  \item \textbf{case2：}将已验证的 \(4*4\) 内核扩展到更大矩阵，以较简单的实现取得9.2808倍加速。
+\end{enumerate}
+
+\paragraph{实验设定与指标。}
+A、B、C 均按行连续存储，形状分别为 \(m*n\)、\(n*p\)、\(m*p\)，元素为4字节。Part B 的模拟缓存为32组、每组1行、每块16字节，总容量512字节；A、B、C 连续紧密排列。局部数据使用框架的 \texttt{reg}，受36个模拟寄存器的限制，未另外申请内存，也未使用额外 buffer。本文中的“寄存器数组”指该框架的模拟寄存器，并非假定普通 C++ 数组总能进入真实 CPU 寄存器。
+
+令 \(M=\mc\)，\(R=\mr\)。后者是 trace 中的 load/store 次数，不是另一层硬件缓存的缺失率。评测成本与综合加速比为
+\[
+  L=15M+R,\qquad S_i=\frac{L_{i,\mathrm{baseline}}}{L_i},\qquad
+  S_{\mathrm{weighted}}=0.3S_1+0.3S_2+0.4S_3.
+\]
+每次先确认结果为 \texttt{OK}，再比较性能。测修改后的实现使用 \cmd{python3 test/gemm_test.py}；带 \cmd{--baseline} 的命令仅用于建立原始基准。
+
+\subsection{case1}
+\textbf{形状与起点。} A、B、C 均为 \(16*16\)。原始 \texttt{ijk} 在内层沿 B 的列访问，相邻地址相差64字节；一个块虽然能存4个元素，却很难立即用完。同时，单个输出的部分和保存在寄存器中，C 只写回一次。因此最初的改进目标是改善 B 的访问连续性，同时保留这种低写回开销。
+
+\textbf{第一步：交换循环。} 改成 \texttt{ikj} 后，B、C 都按行连续访问，cache miss 从4792降到2464；但每次乘加都读、写 C，load/store 从8448增到12800。加速比仅为1.6143，说明局部性改善必须和访问总量一起衡量。期间曾误用 \cmd{--baseline}，造成“改代码后结果不变”；纠正测试对象后才得到有效对照。
+
+\textbf{第二步：整行寄存器累加。} 用16个寄存器保存一行 C，完成全部 \(k\) 的累加后再写回，保留 B 的连续读取并消除中途读写 C。访问数精确为
+\[
+  R=16^2+16^3+16^2=4608.
+\]
+加速比升至3.6106，但计算下一行时仍需重新读取 B。讨论过的2列、4列展开主要复用 A；它们未留下独立实测记录，因此不计入结果表。
+
+\textbf{第三步：同时复用 A、B。} 最终用16个寄存器保存 \(4*4\) 输出块。每轮 \(k\) 读取4个 A、4个 B，完成16次乘加；每块全部累加完后才写回。共有16个输出块，故
+\[
+  R=16\,[16(4+4)+16]=2304,
+\]
+与实测完全一致。cache miss 降至496，latency 为9744，加速比8.2438。
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lrrrr}
+\toprule
+case1 实测版本 & \mc & \mr & latency & speedup\\
+\midrule
+原始 \texttt{ijk} & 4792 & 8448 & 80328 & 1.0000\\
+交换为 \texttt{ikj} & 2464 & 12800 & 49760 & 1.6143\\
+整行寄存器累加 & 1176 & 4608 & 22248 & 3.6106\\
+\(4*4\) 寄存器分块 & 496 & 2304 & 9744 & 8.2438\\
+\bottomrule
+\end{tabular}
+\caption{case1 的逐步优化。各行整理自上一轮留存的本地评测记录。}
+\end{table}
+
+\textbf{cache miss 的精细分析。} 三个矩阵各占64个缓存块，冷启动至少涉及192个不同块。实测496次比该下界多304次，说明容量限制、重复读取和直接映射冲突仍会引起重新装入；不能简单用2304除以4估计 miss。\(4*4\) 内核的优势在于 B 连续4列可充分使用同一块，A 的同一元素用于4列，B 的同一元素用于4行。按实际数组基址可写出组号：
+\[
+ q_A(i,k)=\bigl(4i+\lfloor k/4\rfloor\bigr)\bmod32,\qquad
+ q_B(k,j)=\bigl(4k+\lfloor j/4\rfloor\bigr)\bmod32.
+\]
+例如 A 的第0行第0列与 B 的第0行第0列都映射到第0组，tag 不同，即使当前块尚未用完也可能被替换。按源码顺序逐次生成地址，并维护32项的缓存 tag 状态，可得到下表；每项包括一个输出块的 A、B 读取和 C 写回，计算下一个块时保留缓存状态。
+\begin{table}[H]
+\centering\small
+\begin{tabular}{crrrr}
+\toprule
+行块起点 $i$ / 列块起点 $j$ & 0 & 4 & 8 & 12\\
+\midrule
+0  & 39 & 28 & 31 & 28\\
+4  & 36 & 27 & 28 & 31\\
+8  & 39 & 28 & 31 & 28\\
+12 & 36 & 27 & 28 & 31\\
+\bottomrule
+\end{tabular}
+\caption{case1 地址序列模型预测的各输出块 cache miss。}
+\end{table}
+合计为 $496$，其中 A、B、C 分别贡献 $176$、$256$、$64$ 次，与保存的 trace 完全一致。复核脚本为 \cmd{report/verify_trace.py}，在项目根目录执行 \cmd{python3 report/verify_trace.py}；脚本同时核对8份 trace 的地址序列与源码访问顺序模型。此处是对确定地址序列的精确回放，不是只由块尺寸推出的通用闭式公式，也不代替官方的合法性与正确性检查。
+
+\shot[0.94]{img/stage_4.png}{朴素实现基准。case1、case2、case3 的 baseline latency 分别为80328、607040、613542。}{fig:baseline}
+
+\subsubsection*{case1 中间版本的实测记录}
+\shot[0.91]{img/stage_7.png}{交换为 \texttt{ikj}：cache miss 减少，但 C 的反复读写增加了访问次数。}{fig:ikj}
+\shot[0.91]{img/stage_8.png}{整行寄存器累加：消除中间 C 访问，case1 加速比提升至3.6106。}{fig:row}
+\shot[0.91]{img/stage_9.png}{仅 case1 使用 \(4*4\) 分块：case1 已达8.2438倍，但综合加速比仍只有3.1732。}{fig:tile}
+
+\subsection{case2}
+\textbf{形状与实现。} A、B、C 均为 \(32*32\)。case1 的经验表明，仅优化一个 case 会受综合权重限制。因此将同一 \(4*4\) 内核应用到 case2，而不是继续只追求 case1 的局部提升。32能被4整除，输出恰好分成64个块，不需要专门的尾块内核。
+
+\textbf{理论访问数。} 每块进行32轮 \(k\)，每轮读8个元素，最后写16个结果：
+\[
+  R=64\,[32(4+4)+16]=17408.
+\]
+实测 \(\mc=3200\)、\(\mr=17408\)，\(L=65408\)，相对 baseline 的607040为9.2808倍加速；原始 cache miss 为36032。
+
+\textbf{局部性与反思。} B 每行128字节，逐列访问会跨越多个缓存块；改为连续4列读取后，同一块中的4个元素能在当前内层被使用。三个矩阵总共涉及768个不同块，而缓存只能同时容纳32块，因此3200次 miss 高于冷缺失下界是正常的。分块降低了重复访存，但并不意味着整个工作集能常驻缓存。该方案已取得较高收益，后续将注意力转向权重更高、提升较弱的 case3。
+
+\shot[0.96]{img/stage_10.png}{三个 case 统一使用 \(4*4\) 分块：综合加速比7.5445，性能分93.49；case3 成为下一步重点。}{fig:alltile}
+
+\subsection{case3}
+\textbf{形状与瓶颈。} A 为 \(27*41\)，B 为 \(41*27\)，C 为 \(27*27\)。统一 \(4*4\) 分块虽正确，但27不能被4整除，B 的行跨度为108字节，也不是16字节块大小的整数倍；连续4列可能横跨两个块。它的实测加速比5.7176，明显低于前两个 case，且占综合指标40\%的权重。因此选择针对该尺寸重新设计。
+
+\textbf{块形状。} 改成 \(3*7\)，用21个寄存器累加。27行正好分成9组，27列分成 \(7+7+7+6\)，只需处理最后一列块的边界。每轮读3个 A、最多7个 B，分别复用到多个输出。对任意 \(a*b\) 输出块，若数据不额外暂存，则总访存数为
+\[
+  R=mn\left\lceil\frac{p}{b}\right\rceil
+    +np\left\lceil\frac{m}{a}\right\rceil+mp.
+\]
+其中前两项是 A、B 读取，最后一项是 C 写回。代入可得：
+\[
+ \begin{aligned}
+ R_{4*4}&=27\cdot41\cdot7+41\cdot27\cdot7+729=16227,\\
+ R_{3*7}&=27\cdot41\cdot4+41\cdot27\cdot9+729=15120.
+ \end{aligned}
+\]
+B 读取由7749增至9963，但 A 读取由7749降至4428，合计减少1107次。由此可见，较大列块的收益必须结合行块数量一起分析；7列也不是为了声称与缓存块对齐。
+
+\textbf{块间复用。} 外层先遍历列块 \(j\)，内层遍历行块 \(i\)，让相邻输出块使用相同的 B 列区间。相邻块的 \(k\) 遍历方向交替：前一块从0到40，下一块从40到0，优先使用刚访问过的 B 尾部数据。方向由 \((i/3+j/7)\bmod2\) 决定，核心控制为：
+\begin{lstlisting}
+for(reg j=0;j<p;j+=7){
+  for(reg i=0;i<m;i+=3){
+    // sums[21] is initialized to zero
+    for(reg k=((i/3+j/7)%2?n-1:0);
+        k>=0 && k<n;
+        k+=((i/3+j/7)%2?-1:1)){
+      // load A's 3 elements and B's up to 7 elements
+      // update the 3*7 partial sums in registers
+    }
+    // write back this output block
+  }
+}
+\end{lstlisting}
+这种次序只改变整数乘加的遍历顺序；每个输出仍覆盖全部41个 \(k\)，不会漏算或重复计算。所有 case 在最终评测中均为 \texttt{OK}。
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{lrrrr}
+\toprule
+case3 实测版本 & \mc & \mr & latency & speedup\\
+\midrule
+朴素 \texttt{ijk} & 36869 & 60507 & 613542 & 1.0000\\
+统一 \(4*4\) 分块 & 6072 & 16227 & 107307 & 5.7176\\
+\(3*7\) + 块次序 + 双向 \(k\) & 4789 & 15120 & 86955 & 7.0559\\
+\bottomrule
+\end{tabular}
+\caption{case3 的实测对照。最后一行同时包含三项调整，未将其收益分别归因于某一项。}
+\end{table}
+
+\textbf{理论与实测。} 15120次 load/store 与推导一致；cache miss 则还取决于 A、B、C 的映射冲突、跨块访问以及块间残留数据，不能仅由块大小计算。相对 \(4*4\)，最终 miss 减少1283次，latency 下降约18.97\%。此前按访问序列建立的模型给出4789次 miss，用来形成待验证假设；随后官方脚本的结果与之吻合，最终以上一轮官方脚本的实测为准；本次对现有 \cmd{gemm_traces/case3.trace} 的独立回放同样得到4789次 miss。由于没有逐项消融的官方评测截图，本文不把三项改动各自的独立贡献写成已测结论。
+
+\textbf{综合结果。} case1、case2 保持不变，仅用新的 case3 替换统一分块版本后，
+\[
+ S_{\mathrm{weighted}}
+ =0.3\frac{80328}{9744}
+  +0.3\frac{607040}{65408}
+  +0.4\frac{613542}{86955}
+ \approx 8.0797.
+\]
+因此综合性能分从93.49提高到100.00。这个结果也说明：应根据当前瓶颈和评分权重分配优化精力，而不是要求每个 case 使用相同实现。
+
+\section{反馈/收获/感悟/总结}
+本次实验最重要的收获是把“局部性好”转化为可验证的访问行为。最初交换循环顺序确实降低了 cache miss，却增加了 C 的读写次数；使用寄存器保存部分和后，才同时控制了两种成本。进一步由整行累加改为输出块累加，则把仅复用 A 扩展为同时复用 A、B。
+
+第二个收获是优化具有尺寸依赖性。\(4*4\) 在16列、32列时简单有效，放到27列时仍正确，却不是同样合适。重新统计每种数据的读取次数，再调整块形状和遍历方向，比单纯增大块更有依据。同时，分块要服从寄存器预算，21个累加值之外还需给地址、循环变量和临时值留出空间。按照当前变量的同时存活区间，\(4*4\) 内核最多使用30个模拟寄存器，\(3*7\) 内核最多33个，均低于36个的限制；这里是源码静态计数，不能替代框架的运行时检查。
+
+实验也暴露了测试方法上的问题：误用 baseline 命令时，正确的代码修改不会反映到结果中。此后将“是否测到当前代码、是否通过正确性检查、两个 miss 指标怎样变化、综合指标是否改善”作为固定检查顺序。Part A 的逐条 trace 核对和 Part B 的分阶段记录，使最后的分数能够对应到具体修改，而不是只保留一次满分输出。
+
+\section{参考的重要资料}
+\begin{enumerate}
+  \item Randal E. Bryant, David R. O'Hallaron. \textit{Computer Systems: A Programmer's Perspective}, 3rd ed. 第6章的存储层次、局部性、缓存映射及矩阵计算示例。
+\end{enumerate}
+
+\end{document}
+
