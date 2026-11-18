@@ -23,10 +23,10 @@ void gemm_case0(ptr_reg A, ptr_reg B, ptr_reg C, ptr_reg buffer)
   for (reg i = 0; i < m; ++i)
   { // allocate 4
     for (reg j = 0; j < p; ++j)
-    {               // allocate 5
+    { // allocate 5
       reg tmpc = 0; // allocate 6
       for (reg k = 0; k < n; ++k)
-      {                          // allocate 7
+      { // allocate 7
         reg tmpa = A[i * n + k]; // allocate 8
         reg tmpb = B[k * p + j]; // allocate 9
         tmpc += tmpa * tmpb;
@@ -49,20 +49,60 @@ void gemm_case0(ptr_reg A, ptr_reg B, ptr_reg C, ptr_reg buffer)
 
 void gemm_case1(ptr_reg A, ptr_reg B, ptr_reg C, ptr_reg buffer)
 {
-  for (reg i = 0; i < m; ++i)
-  {
-    for (reg j = 0; j < p; ++j)
-    {
-      reg tmpc = 0;
-      for (reg k = 0; k < n; ++k)
-      {
-        reg tmpa = A[i * n + k];
-        reg tmpb = B[k * p + j];
-        tmpc += tmpa * tmpb;
+  //原版
+  // for (reg i = 0; i < m; ++i)
+  // {
+  //   for (reg j = 0; j < p; ++j)
+  //   {
+  //     reg tmpc = 0;
+  //     for (reg k = 0; k < n; ++k)
+  //     {
+  //       reg tmpa = A[i * n + k];
+  //       reg tmpb = B[k * p + j];
+  //       tmpc += tmpa * tmpb;
+  //     }
+  //     C[i * p + j] = tmpc;
+  //   }
+  // }
+
+  for(reg i=0;i<m;i+=4){
+    for(reg j=0;j<p;j+=4){
+      reg sums[16];
+      for(reg t=0;t<16;++t){
+        sums[t]=0;
       }
-      C[i * p + j] = tmpc;
+
+      for (reg k = 0; k < n; ++k){
+        reg a[4];
+
+        for(reg r=0;r<4 && r+i<m;++r){//从A的最多 4 行中，各读取一个元素
+          a[r]=A[(i+r)*n+k];
+        }
+        for(reg c=0;c<4 && j+c<p;++c){//连续读取B的最多4列
+          reg b=B[k*p+j+c];
+
+          for(reg r=0;r<4 && i+r<m;++r){
+            sums[r*4+c]+=a[r]*b;
+          }
+        }
+        
+      }
+      //写回
+      for(reg r=0;r<4 && i+r<m;++r){
+        for(reg c=0;c<4 && j+c<p;++c){
+          C[(i + r) * p + j + c] = sums[r * 4 + c];
+        }
+      }
     }
+
+    
+
+    
+
+    
   }
+
+  
 }
 
 #undef m
@@ -75,20 +115,49 @@ void gemm_case1(ptr_reg A, ptr_reg B, ptr_reg C, ptr_reg buffer)
 
 void gemm_case2(ptr_reg A, ptr_reg B, ptr_reg C, ptr_reg buffer)
 {
-  for (reg i = 0; i < m; ++i)
-  {
-    for (reg j = 0; j < p; ++j)
-    {
-      reg tmpc = 0;
-      for (reg k = 0; k < n; ++k)
-      {
-        reg tmpa = A[i * n + k];
-        reg tmpb = B[k * p + j];
-        tmpc += tmpa * tmpb;
-      }
-      C[i * p + j] = tmpc;
+  // for (reg i = 0; i < m; ++i)
+  // {
+  //   for (reg j = 0; j < p; ++j)
+  //   {
+  //     reg tmpc = 0;
+  //     for (reg k = 0; k < n; ++k)
+  //     {
+  //       reg tmpa = A[i * n + k];
+  //       reg tmpb = B[k * p + j];
+  //       tmpc += tmpa * tmpb;
+  //     }
+  //     C[i * p + j] = tmpc;
+  //   }
+  // }
+
+    for(reg i=0;i<m;i+=4){
+        for(reg j=0;j<p;j+=4){
+            reg sums[16];
+            for(reg t=0;t<16;++t){
+                sums[t]=0;
+            }
+
+            for(reg k=0;k<n;++k){
+                reg a[4];
+                for(reg r=0;r<4&&i+r<m;++r){
+                    a[r]=A[(i+r)*n+k];
+                }
+
+                for(reg c=0;c<4&&j+c<p;++c){
+                    reg b=B[k*p+j+c];
+                    for(reg r=0;r<4&&i+r<m;++r){
+                        sums[r*4+c]+=a[r]*b;
+                    }
+                }
+            }
+
+            for(reg r=0;r<4&&i+r<m;++r){
+                for(reg c=0;c<4&&j+c<p;++c){
+                    C[(i+r)*p+j+c]=sums[r*4+c];
+                }
+            }
+        }
     }
-  }
 }
 
 #undef m
@@ -99,20 +168,84 @@ void gemm_case2(ptr_reg A, ptr_reg B, ptr_reg C, ptr_reg buffer)
 #define n case3_n
 #define p case3_p
 
+// void gemm_case3(ptr_reg A, ptr_reg B, ptr_reg C, ptr_reg buffer)
+// {
+//   // for (reg i = 0; i < m; ++i)
+//   // {
+//   //   for (reg j = 0; j < p; ++j)
+//   //   {
+//   //     reg tmpc = 0;
+//   //     for (reg k = 0; k < n; ++k)
+//   //     {
+//   //       reg tmpa = A[i * n + k];
+//   //       reg tmpb = B[k * p + j];
+//   //       tmpc += tmpa * tmpb;
+//   //     }
+//   //     C[i * p + j] = tmpc;
+//   //   }
+//   // }
+
+//     for(reg i=0;i<m;i+=4){
+//         for(reg j=0;j<p;j+=4){
+//             reg sums[16];
+//             for(reg t=0;t<16;++t){
+//                 sums[t]=0;
+//             }
+
+//             for(reg k=0;k<n;++k){
+//                 reg a[4];
+//                 for(reg r=0;r<4&&i+r<m;++r){
+//                     a[r]=A[(i+r)*n+k];
+//                 }
+
+//                 for(reg c=0;c<4&&j+c<p;++c){
+//                     reg b=B[k*p+j+c];
+//                     for(reg r=0;r<4&&i+r<m;++r){
+//                         sums[r*4+c]+=a[r]*b;
+//                     }
+//                 }
+//             }
+
+//             for(reg r=0;r<4&&i+r<m;++r){
+//                 for(reg c=0;c<4&&j+c<p;++c){
+//                     C[(i+r)*p+j+c]=sums[r*4+c];
+//                 }
+//             }
+//         }
+//     }
+// }
 void gemm_case3(ptr_reg A, ptr_reg B, ptr_reg C, ptr_reg buffer)
 {
-  for (reg i = 0; i < m; ++i)
-  {
-    for (reg j = 0; j < p; ++j)
-    {
-      reg tmpc = 0;
-      for (reg k = 0; k < n; ++k)
-      {
-        reg tmpa = A[i * n + k];
-        reg tmpb = B[k * p + j];
-        tmpc += tmpa * tmpb;
+  for(reg j=0;j<p;j+=7){
+    for(reg i=0;i<m;i+=3){
+      reg sums[21];
+      for(reg t=0;t<21;++t){
+        sums[t]=0;
       }
-      C[i * p + j] = tmpc;
+
+      //相邻小块交替正向、反向遍历k
+      for(reg k=((i/3+j/7)%2?n-1:0);
+          k>=0 && k<n;
+          k+=((i/3+j/7)%2?-1:1)){
+        reg a0=A[i*n+k];
+        reg a1=A[(i+1)*n+k];
+        reg a2=A[(i+2)*n+k];
+
+        for(reg c=0;c<7 && j+c<p;++c){
+          reg b=B[k*p+j+c];
+
+          sums[c]+=a0*b;
+          sums[7+c]+=a1*b;
+          sums[14+c]+=a2*b;
+        }
+      }
+
+      //写回3行、最多7列
+      for(reg r=0;r<3;++r){
+        for(reg c=0;c<7 && j+c<p;++c){
+          C[(i+r)*p+j+c]=sums[r*7+c];
+        }
+      }
     }
   }
 }
