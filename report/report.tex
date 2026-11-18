@@ -33,15 +33,12 @@
 \newcommand{\mr}{\texttt{miss\_reg}}
 \newcommand{\cmd}[1]{\texttt{\detokenize{#1}}}
 \newcommand{\shot}[4][0.96]{%
-  \IfFileExists{#2}{%
-    \begin{figure}[H]\centering
-    \includegraphics[width=#1\linewidth]{#2}
-    \caption{#3}\label{#4}
-    \end{figure}}{}}
-% 原始截图从上一轮 cachelab_report_source.zip 的 figures/ 目录同步后，
-% 上面的宏会自动嵌入；缺图时省略图片，不伪造终端截图。
-% 以下成绩来自上一轮已保存的报告，本次已用项目现有 trace 复核 Part B 数值。
-% 本次环境无法启动 WSL，因此没有将 trace 复核描述为重新运行官方评测。
+  \begin{figure}[H]\centering
+  \includegraphics[width=#1\linewidth]{#2}
+  \caption{#3}\label{#4}
+  \end{figure}}
+% 所有原始终端截图来自上一轮报告源码包，保存于本报告的 img/ 目录。
+% 以下成绩来自已保存的本地评测，本次另用现有 trace 核对 Part B 数值。
 \begin{document}
 \thispagestyle{empty}
 \begin{center}
@@ -63,8 +60,17 @@ csim 分数 & case1 & case2 & case3 & weighted & Part B 性能分\\
 \end{table}
 \vspace{-9pt}
 {\small 表中按模板保留两位小数；正文保留更多位数以便核对。Part A 共20项测试全部通过，Part B 各 case 均为 \texttt{OK}。}
-\subsection*{本地评测记录}
-{\small 以下汇总上一轮本地评测结果。本次对项目现有8份 Part B trace 重新统计，cache miss、访存次数及 latency 均与记录一致；这一步是 trace 复核，不等同于重新编译并运行官方评测。\IfFileExists{figures/part_a.png}{\IfFileExists{figures/part_b_final.png}{}{原始终端截图尚待同步，本稿先保留完整数据，截图文件就位后自动插入。}}{原始终端截图尚待同步，本稿先保留完整数据，截图文件就位后自动插入。}}
+\subsection*{本地评测截图}
+{\small 以下为实验过程中保存的原始终端截图，展示 Part A 完整测试与 Part B 最终测试结果。}
+
+\vspace{-7pt}
+\shot[0.98]{img/part_a.png}{Part A 本地评测：20/20，通过分数100.00。}{fig:parta}
+\vspace{-7pt}
+\shot[0.98]{img/part_b_final.png}{最终 Part B 本地评测：综合加速比8.0797，性能分100.00。}{fig:final}
+
+\clearpage
+\subsection*{评测数据复核}
+{\small 下表汇总最终评测数据，与前页截图一致。本次对项目保存的8份 Part B trace 重新统计，cache miss、访存次数及 latency 均与截图一致；trace 复核用于检查记录，不等同于重新运行官方评测。}
 \begin{table}[H]
 \centering\small
 \begin{tabular}{lrrrrr}
@@ -79,10 +85,6 @@ case3 & 4789 & 15120 & 86955 & 613542 & 7.0559\\
 \end{tabular}
 \caption{上一轮最终本地评测数据；Part B 数值已与当前保存的 trace 复核。}
 \end{table}
-\vspace{-7pt}
-\shot[0.92]{figures/part_a.png}{Part A 本地评测：20/20，通过分数100.00。}{fig:parta}
-\vspace{-7pt}
-\shot[0.98]{figures/part_b_final.png}{最终 Part B 本地评测：综合加速比8.0797，性能分100.00。}{fig:final}
 
 \section{Part A: cache 模拟器}
 \subsection{实现简述}
@@ -204,12 +206,12 @@ case1 实测版本 & \mc & \mr & latency & speedup\\
 \end{table}
 合计为 $496$，其中 A、B、C 分别贡献 $176$、$256$、$64$ 次，与保存的 trace 完全一致。复核脚本为 \cmd{report/verify_trace.py}，在项目根目录执行 \cmd{python3 report/verify_trace.py}；脚本同时核对8份 trace 的地址序列与源码访问顺序模型。此处是对确定地址序列的精确回放，不是只由块尺寸推出的通用闭式公式，也不代替官方的合法性与正确性检查。
 
-\shot[0.94]{figures/stage_4.png}{朴素实现基准。case1、case2、case3 的 baseline latency 分别为80328、607040、613542。}{fig:baseline}
+\shot[0.94]{img/stage_4.png}{朴素实现基准。case1、case2、case3 的 baseline latency 分别为80328、607040、613542。}{fig:baseline}
 
-% 原始中间版本截图（同步 figures/ 后显示）：
-\shot[0.91]{figures/stage_7.png}{交换为 \texttt{ikj}：cache miss 减少，但 C 的反复读写增加了访问次数。}{fig:ikj}
-\shot[0.91]{figures/stage_8.png}{整行寄存器累加：消除中间 C 访问，case1 加速比提升至3.6106。}{fig:row}
-\shot[0.91]{figures/stage_9.png}{仅 case1 使用 \(4*4\) 分块：case1 已达8.2438倍，但综合加速比仍只有3.1732。}{fig:tile}
+\subsubsection*{case1 中间版本的实测记录}
+\shot[0.91]{img/stage_7.png}{交换为 \texttt{ikj}：cache miss 减少，但 C 的反复读写增加了访问次数。}{fig:ikj}
+\shot[0.91]{img/stage_8.png}{整行寄存器累加：消除中间 C 访问，case1 加速比提升至3.6106。}{fig:row}
+\shot[0.91]{img/stage_9.png}{仅 case1 使用 \(4*4\) 分块：case1 已达8.2438倍，但综合加速比仍只有3.1732。}{fig:tile}
 
 \subsection{case2}
 \textbf{形状与实现。} A、B、C 均为 \(32*32\)。case1 的经验表明，仅优化一个 case 会受综合权重限制。因此将同一 \(4*4\) 内核应用到 case2，而不是继续只追求 case1 的局部提升。32能被4整除，输出恰好分成64个块，不需要专门的尾块内核。
@@ -222,7 +224,7 @@ case1 实测版本 & \mc & \mr & latency & speedup\\
 
 \textbf{局部性与反思。} B 每行128字节，逐列访问会跨越多个缓存块；改为连续4列读取后，同一块中的4个元素能在当前内层被使用。三个矩阵总共涉及768个不同块，而缓存只能同时容纳32块，因此3200次 miss 高于冷缺失下界是正常的。分块降低了重复访存，但并不意味着整个工作集能常驻缓存。该方案已取得较高收益，后续将注意力转向权重更高、提升较弱的 case3。
 
-\shot[0.96]{figures/stage_10.png}{三个 case 统一使用 \(4*4\) 分块：综合加速比7.5445，性能分93.49；case3 成为下一步重点。}{fig:alltile}
+\shot[0.96]{img/stage_10.png}{三个 case 统一使用 \(4*4\) 分块：综合加速比7.5445，性能分93.49；case3 成为下一步重点。}{fig:alltile}
 
 \subsection{case3}
 \textbf{形状与瓶颈。} A 为 \(27*41\)，B 为 \(41*27\)，C 为 \(27*27\)。统一 \(4*4\) 分块虽正确，但27不能被4整除，B 的行跨度为108字节，也不是16字节块大小的整数倍；连续4列可能横跨两个块。它的实测加速比5.7176，明显低于前两个 case，且占综合指标40\%的权重。因此选择针对该尺寸重新设计。
